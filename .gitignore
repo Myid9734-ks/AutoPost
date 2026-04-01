@@ -1,0 +1,25 @@
+# 환경변수 및 인증정보
+.env
+config/tistory_session.json
+config/naver_session.json
+
+# 생성된 콘텐츠 (임시)
+output/tistory/*.txt
+output/tistory/*.html
+output/naver/*.txt
+output/naver/*.html
+
+# 로컬 이미지 캐시
+images/
+
+# 로그 (개인 데이터 포함)
+logs/
+
+# macOS
+.DS_Store
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
