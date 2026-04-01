@@ -82,11 +82,27 @@ python3 scripts/setup_naver_session.py
 
 **`output/tistory/`**
 - `title.txt` — 포스팅 제목
-- `content.html` — HTML 본문 (이미지 위치에 `{{IMAGE_1}}`, `{{IMAGE_2}}` 삽입)
+- `content.html` — HTML 본문
 - `hashtags.txt` — 태그 (쉼표 구분)
 - `category.txt` — 카테고리명
 
 **`output/naver/`** (동일 구조)
+
+### content.html 작성 규칙
+
+규칙은 단 하나입니다 — **이미지를 넣고 싶은 위치에 `{{IMAGE_N}}` 플레이스홀더를 삽입**하세요.
+
+```
+{{IMAGE_1}}   ← 첫 번째 이미지 위치
+{{IMAGE_2}}   ← 두 번째 이미지 위치
+{{IMAGE_3}}   ← 세 번째 이미지 위치 (개수 제한 없음)
+```
+
+나머지는 **AI가 자유롭게 작성**합니다:
+- HTML 태그 구조 (h2, p, ul, table, blockquote 등) 자유
+- 글 길이 자유
+- 이미지 수량 자유 (0장도 가능)
+- 이미지 위치 자유 (글 중간, 상단, 하단 어디든)
 
 ### 2. 이미지 생성 및 NAS 업로드
 ```bash
