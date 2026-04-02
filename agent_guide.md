@@ -96,31 +96,67 @@ ETF 산업
 글 작성 후 아래 명령어를 실행할 때 이미지 프롬프트가 필요합니다.
 
 ```bash
+# 티스토리 이미지
 python3 scripts/generate_image.py \
   --slug "슬러그-영문-소문자" \
+  --platform tistory \
+  --prompts '["이미지1 영문 프롬프트", "이미지2 영문 프롬프트"]'
+
+# 네이버 이미지
+python3 scripts/generate_image.py \
+  --slug "슬러그-영문-소문자" \
+  --platform naver \
   --prompts '["이미지1 영문 프롬프트", "이미지2 영문 프롬프트"]'
 ```
 
 - 프롬프트는 **영문**으로 작성
 - 슬러그는 포스팅 주제를 영문 소문자+하이픈으로 (예: `ai-coding-tools`)
 - 이미지 수량은 `{{IMAGE_N}}`의 수와 일치
+- `--platform` 으로 지정된 플랫폼의 content.html만 수정됨 (티스토리/네이버 이미지 분리)
 
 ---
 
 ## 전체 실행 순서
 
+### ⚠️ 에이전트 필독 — 스크립트 실행 규칙
+
+**절대 금지 사항:**
+- 동일 스크립트를 2번 이상 실행하는 것은 **중복 포스팅 사고**로 직결됨
+- `nohup ... &` 백그라운드 실행 후 "Command failed" 에러가 떠도, 프로세스가 실제로 살아있을 수 있음
+- 에러 발생 시 재시도 전에 반드시 `ps aux | grep 스크립트명`으로 실행 중인 프로세스 확인
+
+**실행 전 필수 체크:**
 ```bash
-# 1. 이미지 생성 + NAS 업로드 ({{IMAGE_N}} → 실제 URL 교체)
-python3 scripts/generate_image.py --slug "슬러그" --prompts '["프롬프트1", "프롬프트2"]'
+# 실행 전 항상 먼저 확인
+ps aux | grep -E 'generate_image|upload_tistory|upload_naver|cleanup' | grep -v grep
+```
+→ 결과가 있으면 **절대 실행하지 말 것**. 기존 프로세스가 끝날 때까지 대기.
 
-# 2. 티스토리 업로드
-python3 scripts/upload_tistory.py
+**권장 실행 방식 — run_autopost.sh 단일 파일로 묶어서 1회만 실행:**
+```bash
+bash /Users/mypc/blog_auto/run_autopost.sh > /tmp/autopost.log 2>&1 &
+```
+- osascript "Command failed" 에러가 떠도 = 실제 실패가 아닐 수 있음
+- 에러 후 재실행 전에 반드시 프로세스 확인 먼저
 
-# 3. 네이버 업로드
-python3 scripts/upload_naver.py
+---
 
-# 4. 정리 (output/, images/ 삭제 + 로그 기록)
-python3 scripts/cleanup.py
+**run_autopost.sh 내용 (매번 새로 생성):**
+```bash
+#!/bin/bash
+cd /Users/mypc/blog_auto
+
+python3 scripts/generate_image.py --slug "티스토리슬러그" --platform tistory --prompts '["프롬프트1", "프롬프트2", "프롬프트3"]' >> /tmp/autopost.log 2>&1
+python3 scripts/generate_image.py --slug "네이버슬러그" --platform naver --prompts '["프롬프트1", "프롬프트2", "프롬프트3"]' >> /tmp/autopost.log 2>&1
+python3 scripts/upload_tistory.py >> /tmp/autopost.log 2>&1
+python3 scripts/upload_naver.py >> /tmp/autopost.log 2>&1
+python3 scripts/cleanup.py >> /tmp/autopost.log 2>&1
+```
+
+**로그 확인:**
+```bash
+tail -20 /tmp/autopost.log
+ps aux | grep -E 'generate_image|upload_tistory|upload_naver|cleanup' | grep -v grep
 ```
 
 ---

@@ -97,8 +97,9 @@ def generate_images(slug: str, prompts: list[str]) -> list[str]:
 
 def main():
     parser = argparse.ArgumentParser(description="DALL-E 3 이미지 생성 + NAS 업로드")
-    parser.add_argument("--slug",    required=True, help="주제 슬러그 (예: ai-trend)")
-    parser.add_argument("--prompts", required=True, help="이미지 프롬프트 목록 (JSON 배열)")
+    parser.add_argument("--slug",     required=True, help="주제 슬러그 (예: ai-trend)")
+    parser.add_argument("--prompts",  required=True, help="이미지 프롬프트 목록 (JSON 배열)")
+    parser.add_argument("--platform", required=True, choices=["tistory", "naver"], help="플랫폼 (tistory 또는 naver)")
     args = parser.parse_args()
 
     try:
@@ -119,7 +120,7 @@ def main():
         print("오류: .env에 NAS_MOUNT_PATH가 없습니다.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"총 {len(prompts)}장 생성 시작 (슬러그: {args.slug})\n")
+    print(f"총 {len(prompts)}장 생성 시작 (슬러그: {args.slug}, 플랫폼: {args.platform})\n")
 
     urls = generate_images(args.slug, prompts)
 
@@ -127,15 +128,16 @@ def main():
     for url in urls:
         print(f"  {url}")
 
-    # content.html 플레이스홀더 교체 ({{IMAGE_1}}, {{IMAGE_2}}, ...)
-    for platform in ["tistory", "naver"]:
-        content_path = BASE_DIR / "output" / platform / "content.html"
-        if content_path.exists():
-            html = content_path.read_text(encoding="utf-8")
-            for i, url in enumerate(urls):
-                html = html.replace(f"{{{{IMAGE_{i+1}}}}}", f'<img src="{url}" style="max-width:100%;" alt="이미지{i+1}">')
-            content_path.write_text(html, encoding="utf-8")
-            print(f"  {platform}/content.html 이미지 URL 삽입 완료")
+    # 지정된 플랫폼의 content.html 플레이스홀더만 교체
+    content_path = BASE_DIR / "output" / args.platform / "content.html"
+    if content_path.exists():
+        html = content_path.read_text(encoding="utf-8")
+        for i, url in enumerate(urls):
+            html = html.replace(f"{{{{IMAGE_{i+1}}}}}", f'<img src="{url}" style="max-width:100%;" alt="이미지{i+1}">')
+        content_path.write_text(html, encoding="utf-8")
+        print(f"  {args.platform}/content.html 이미지 URL 삽입 완료")
+    else:
+        print(f"  경고: {content_path} 파일이 없습니다.")
 
     print("\n[JSON]")
     print(json.dumps(urls, ensure_ascii=False))
