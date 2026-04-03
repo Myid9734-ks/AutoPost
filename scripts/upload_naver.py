@@ -21,7 +21,7 @@ load_dotenv(BASE_DIR / ".env")
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-SESSION_FILE     = BASE_DIR / "config" / "naver_session.json"
+PROFILE_DIR      = BASE_DIR / "config" / "naver_profile"
 NAVER_DIR        = BASE_DIR / "output" / "naver"
 CONTENT_FILE     = NAVER_DIR / "content.html"
 
@@ -160,8 +160,8 @@ def upload(context, data: dict) -> None:
 # ── 재시도 래퍼 ───────────────────────────────────────────────────────────────
 
 def run_with_retry(max_retries: int = 3) -> bool:
-    if not SESSION_FILE.exists():
-        print("세션 파일이 없습니다. 먼저 setup_naver_session.py를 실행하세요.")
+    if not PROFILE_DIR.exists():
+        print("프로필 디렉토리가 없습니다. 먼저 setup_naver_session.py를 실행하세요.")
         return False
 
     data = read_output_files()
@@ -171,13 +171,14 @@ def run_with_retry(max_retries: int = 3) -> bool:
         print(f"\n[시도 {attempt}/{max_retries}]")
         try:
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=False, slow_mo=200)
-                context = browser.new_context(
-                    storage_state=str(SESSION_FILE),
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=str(PROFILE_DIR),
+                    headless=False,
+                    slow_mo=200,
                     viewport={"width": 1280, "height": 900},
                 )
                 upload(context, data)
-                browser.close()
+                context.close()
 
             send_telegram(f"✅ 네이버 업로드 완료\n제목: {data['title']}")
             return True

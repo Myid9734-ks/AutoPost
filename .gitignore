@@ -2,6 +2,8 @@
 .env
 config/tistory_session.json
 config/naver_session.json
+config/tistory_profile/
+config/naver_profile/
 
 # 생성된 콘텐츠 (임시)
 output/tistory/*.txt
