@@ -157,7 +157,8 @@ def run_with_retry(max_retries: int = 3) -> bool:
                     slow_mo=200,
                     viewport={"width": 1280, "height": 900},
                 )
-                page = context.new_page()
+                pages = context.pages
+                page = pages[0] if pages else context.new_page()
                 upload(page, data)
                 context.close()
 

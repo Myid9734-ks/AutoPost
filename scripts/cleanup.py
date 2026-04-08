@@ -2,7 +2,7 @@
 """
 cleanup.py
 - 업로드 완료 후 정리 작업
-  1. output/tistory/, output/naver/ 파일 삭제
+  1. output/tistory/, output/naver/, output/naver2/ 파일 삭제
   2. images/ 로컬 캐시 이미지 삭제
   3. logs/run_log.txt 에 실행 기록 추가
   4. logs/used_titles.json 에 제목 기록 (중복 방지용)
@@ -21,6 +21,7 @@ load_dotenv(BASE_DIR / ".env")
 
 OUTPUT_TISTORY = BASE_DIR / "output" / "tistory"
 OUTPUT_NAVER   = BASE_DIR / "output" / "naver"
+OUTPUT_NAVER2  = BASE_DIR / "output" / "naver2"
 IMAGES_DIR     = BASE_DIR / "images"
 LOGS_DIR       = BASE_DIR / "logs"
 RUN_LOG        = LOGS_DIR / "run_log.txt"
@@ -51,7 +52,7 @@ def read_title_safe(path: Path) -> str:
 def delete_output_files() -> dict:
     """output/ 하위 txt, html 파일 삭제"""
     deleted = []
-    for folder in [OUTPUT_TISTORY, OUTPUT_NAVER]:
+    for folder in [OUTPUT_TISTORY, OUTPUT_NAVER, OUTPUT_NAVER2]:
         if folder.exists():
             for f in folder.iterdir():
                 if f.suffix in (".txt", ".html"):
@@ -103,7 +104,7 @@ def main() -> None:
 
     # 제목 먼저 읽기 (파일 삭제 전)
     title_tistory = read_title_safe(OUTPUT_TISTORY / "title.txt")
-    title_naver   = read_title_safe(OUTPUT_NAVER   / "title.txt")
+    title_naver   = read_title_safe(OUTPUT_NAVER   / "title.txt") or read_title_safe(OUTPUT_NAVER2 / "title.txt")
 
     print(f"\n[1] output 파일 삭제")
     r1 = delete_output_files()

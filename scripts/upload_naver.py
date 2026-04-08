@@ -3,11 +3,13 @@
 upload_naver.py
 - output/naver/ 파일을 읽어 네이버 블로그에 자동 업로드
 - content.html을 새 탭에서 열어 전체 복사 → 스마트에디터 붙여넣기
+- naver_cookies.json에서 쿠키 복원하여 로그인 유지
 - 실패 시 최대 3회 재시도 + 텔레그램 알림
 """
 
 import os
 import sys
+import json
 import time
 import random
 import subprocess
@@ -22,6 +24,7 @@ load_dotenv(BASE_DIR / ".env")
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 PROFILE_DIR      = BASE_DIR / "config" / "naver_profile"
+COOKIES_FILE     = BASE_DIR / "config" / "naver_cookies.json"
 NAVER_DIR        = BASE_DIR / "output" / "naver"
 CONTENT_FILE     = NAVER_DIR / "content.html"
 
@@ -41,6 +44,18 @@ def send_telegram(message: str) -> None:
         pass
 
 
+# ── 쿠키 복원 ─────────────────────────────────────────────────────────────────
+
+def restore_cookies(context) -> None:
+    """naver_cookies.json에서 쿠키를 읽어 context에 주입"""
+    if not COOKIES_FILE.exists():
+        print("  쿠키 파일 없음 — 로그인 필요할 수 있습니다.")
+        return
+    cookies = json.loads(COOKIES_FILE.read_text(encoding="utf-8"))
+    context.add_cookies(cookies)
+    print(f"  쿠키 복원 완료 ({len(cookies)}개)")
+
+
 # ── 파일 읽기 ──────────────────────────────────────────────────────────────────
 
 def read_output_files() -> dict:
@@ -56,11 +71,22 @@ def read_output_files() -> dict:
 
 def upload(context, data: dict) -> None:
 
-    # 1. 네이버 블로그 접속
+    # 1. 네이버 블로그 접속 (about:blank 재사용)
     print("  [1] 네이버 블로그 접속")
-    page = context.new_page()
+    pages = context.pages
+    page = pages[0] if pages else context.new_page()
     page.goto("https://blog.naver.com/myid9734", wait_until="domcontentloaded")
     time.sleep(2)
+
+    # 1-1. 로그인 여부 확인 — 로그인 안 되어 있으면 로그인 대기
+    login_btn = page.locator("a.link_login, a[href*='login'], button.btn_login")
+    if login_btn.count() > 0 and login_btn.first.is_visible():
+        print("  [1-1] 로그인 필요 — 로그인 페이지로 이동")
+        page.goto("https://nid.naver.com/nidlogin.login", wait_until="domcontentloaded")
+        print("  [1-1] 브라우저에서 로그인 후 Enter 키를 누르세요...")
+        input()
+        page.goto("https://blog.naver.com/myid9734", wait_until="domcontentloaded")
+        time.sleep(2)
 
     # 2. 글쓰기 버튼 클릭 (iframe 안에 있음)
     print("  [2] 글쓰기 클릭")
@@ -173,10 +199,18 @@ def run_with_retry(max_retries: int = 3) -> bool:
             with sync_playwright() as p:
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(PROFILE_DIR),
+                    channel="chrome",
                     headless=False,
                     slow_mo=200,
                     viewport={"width": 1280, "height": 900},
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                    ],
+                    ignore_default_args=["--enable-automation"],
                 )
+                # 쿠키 복원
+                restore_cookies(context)
+
                 upload(context, data)
                 context.close()
 

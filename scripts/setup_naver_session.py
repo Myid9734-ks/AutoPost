@@ -2,14 +2,18 @@
 """
 setup_naver_session.py
 - 고정 프로필 디렉토리로 브라우저를 열어 네이버에 로그인
-- 로그인 정보가 config/naver_profile/ 에 영구 저장
-- 이후 upload_naver.py가 같은 프로필로 자동 재사용
+- 로그인 쿠키를 naver_cookies.json에 만료일 강제 설정하여 저장
+- 이후 upload_naver.py가 쿠키를 복원하여 자동 로그인
 """
 
+import json
+import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-PROFILE_DIR = Path(__file__).resolve().parent.parent / "config" / "naver_profile"
+BASE_DIR    = Path(__file__).resolve().parent.parent
+PROFILE_DIR = BASE_DIR / "config" / "naver_profile"
+COOKIES_FILE = BASE_DIR / "config" / "naver_cookies.json"
 PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
 print("=" * 50)
@@ -22,16 +26,32 @@ print("=" * 50)
 with sync_playwright() as p:
     context = p.chromium.launch_persistent_context(
         user_data_dir=str(PROFILE_DIR),
+        channel="chrome",
         headless=False,
         slow_mo=100,
         viewport={"width": 1280, "height": 900},
+        args=[
+            "--disable-blink-features=AutomationControlled",
+        ],
+        ignore_default_args=["--enable-automation"],
     )
     page = context.new_page()
-    page.goto("https://blog.naver.com/myid9734")
+    page.goto("https://nid.naver.com/nidlogin.login")
 
+    print("  → 네이버 아이디/비밀번호로 로그인하세요.")
+    print("  → 로그인 완료 후 Enter를 누르세요.")
     input("\n로그인 완료 후 Enter 키를 누르세요... ")
+
+    # 쿠키 저장 — 세션 쿠키에 만료일 30일 강제 부여
+    cookies = context.cookies()
+    for c in cookies:
+        if c.get("expires", -1) == -1:
+            c["expires"] = time.time() + 86400 * 30
+    json.dump(cookies, open(str(COOKIES_FILE), "w"), ensure_ascii=False, indent=2)
+    print(f"  쿠키 저장 완료: {COOKIES_FILE} ({len(cookies)}개)")
 
     context.close()
 
 print(f"\n프로필 저장 완료: {PROFILE_DIR}")
+print(f"쿠키 저장 완료: {COOKIES_FILE}")
 print("이제 upload_naver.py를 실행하세요.")

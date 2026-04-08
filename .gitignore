@@ -4,6 +4,9 @@ config/tistory_session.json
 config/naver_session.json
 config/tistory_profile/
 config/naver_profile/
+config/naver_cookies.json
+config/naver_cookies_*.json
+state/
 
 # 생성된 콘텐츠 (임시)
 output/tistory/*.txt
