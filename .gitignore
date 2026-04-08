@@ -4,6 +4,8 @@ config/tistory_session.json
 config/naver_session.json
 config/tistory_profile/
 config/naver_profile/
+config/naver_profile_1/
+config/naver_profile_2/
 config/naver_cookies.json
 config/naver_cookies_*.json
 state/

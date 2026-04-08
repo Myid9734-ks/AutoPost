@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 upload_naver.py
-- output/naver/ 파일을 읽어 네이버 블로그에 자동 업로드
+- output/naver_{N}/ 파일을 읽어 네이버 블로그에 자동 업로드
 - content.html을 새 탭에서 열어 전체 복사 → 스마트에디터 붙여넣기
-- naver_cookies.json에서 쿠키 복원하여 로그인 유지
+- naver_cookies_{N}.json에서 쿠키 복원하여 로그인 유지
+- 사용법: python3 upload_naver.py [--account 1|2]
 - 실패 시 최대 3회 재시도 + 텔레그램 알림
 """
 
@@ -12,7 +13,7 @@ import sys
 import json
 import time
 import random
-import subprocess
+import argparse
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
@@ -21,12 +22,28 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--account", type=int, default=1, choices=[1, 2], help="네이버 계정 번호 (1 또는 2)")
+args = parser.parse_args()
+
+N = args.account
+
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-PROFILE_DIR      = BASE_DIR / "config" / "naver_profile"
-COOKIES_FILE     = BASE_DIR / "config" / "naver_cookies.json"
-NAVER_DIR        = BASE_DIR / "output" / "naver"
+PROFILE_DIR      = BASE_DIR / "config" / f"naver_profile_{N}"
+COOKIES_FILE     = BASE_DIR / "config" / f"naver_cookies_{N}.json"
+NAVER_DIR        = BASE_DIR / "output" / ("naver" if N == 1 else "naver2")
 CONTENT_FILE     = NAVER_DIR / "content.html"
+
+# 블로그 ID (.env에서 읽기)
+if N == 1:
+    BLOG_ID = os.getenv("NAVER_BLOG_ID", "myid9734")
+else:
+    BLOG_ID = os.getenv("NAVER_BLOG_ID_2", "")
+
+if not BLOG_ID:
+    print(f"오류: .env에 NAVER_BLOG_ID_{N} 을 설정하세요.")
+    sys.exit(1)
 
 
 # ── 텔레그램 알림 ─────────────────────────────────────────────────────────────
@@ -47,7 +64,6 @@ def send_telegram(message: str) -> None:
 # ── 쿠키 복원 ─────────────────────────────────────────────────────────────────
 
 def restore_cookies(context) -> None:
-    """naver_cookies.json에서 쿠키를 읽어 context에 주입"""
     if not COOKIES_FILE.exists():
         print("  쿠키 파일 없음 — 로그인 필요할 수 있습니다.")
         return
@@ -71,24 +87,24 @@ def read_output_files() -> dict:
 
 def upload(context, data: dict) -> None:
 
-    # 1. 네이버 블로그 접속 (about:blank 재사용)
-    print("  [1] 네이버 블로그 접속")
+    # 1. 네이버 블로그 접속
+    print(f"  [1] 네이버 블로그 접속 (계정 {N}: {BLOG_ID})")
     pages = context.pages
     page = pages[0] if pages else context.new_page()
-    page.goto("https://blog.naver.com/myid9734", wait_until="domcontentloaded")
+    page.goto(f"https://blog.naver.com/{BLOG_ID}", wait_until="domcontentloaded")
     time.sleep(2)
 
-    # 1-1. 로그인 여부 확인 — 로그인 안 되어 있으면 로그인 대기
+    # 1-1. 로그인 여부 확인
     login_btn = page.locator("a.link_login, a[href*='login'], button.btn_login")
     if login_btn.count() > 0 and login_btn.first.is_visible():
         print("  [1-1] 로그인 필요 — 로그인 페이지로 이동")
         page.goto("https://nid.naver.com/nidlogin.login", wait_until="domcontentloaded")
         print("  [1-1] 브라우저에서 로그인 후 Enter 키를 누르세요...")
         input()
-        page.goto("https://blog.naver.com/myid9734", wait_until="domcontentloaded")
+        page.goto(f"https://blog.naver.com/{BLOG_ID}", wait_until="domcontentloaded")
         time.sleep(2)
 
-    # 2. 글쓰기 버튼 클릭 (iframe 안에 있음)
+    # 2. 글쓰기 버튼 클릭
     print("  [2] 글쓰기 클릭")
     for frame in page.frames:
         btn = frame.query_selector("a._checkBlock._rosRestrict")
@@ -97,14 +113,13 @@ def upload(context, data: dict) -> None:
             break
     time.sleep(3)
 
-    # 스마트에디터 iframe 진입
     editor_frame = page.frame_locator("iframe#mainFrame")
 
-    # 2-1. 이전 글 이어쓰기 팝업 처리 — "취소" = 새 글 쓰기
+    # 2-1. 이전 글 이어쓰기 팝업 처리
     try:
         popup = editor_frame.locator("div.se-popup-alert-confirm")
         if popup.is_visible(timeout=4000):
-            popup.locator("button").first.click()  # 취소(새 글)
+            popup.locator("button").first.click()
             time.sleep(1)
     except Exception:
         pass
@@ -119,10 +134,8 @@ def upload(context, data: dict) -> None:
     page.keyboard.type(data["title"], delay=30)
     time.sleep(0.5)
 
-    # 4. 본문 붙여넣기 (content.html → 클립보드 → 붙여넣기)
+    # 4. 본문 붙여넣기
     print("  [4] 본문 입력 (클립보드 붙여넣기)")
-
-    # content.html을 새 탭에서 열고 전체 복사
     html_page = context.new_page()
     html_page.goto(f"file://{CONTENT_FILE}")
     time.sleep(1)
@@ -132,13 +145,10 @@ def upload(context, data: dict) -> None:
     time.sleep(0.5)
     html_page.close()
 
-    # 본문 영역 클릭 후 붙여넣기
-    # 1순위: placeholder has_text
     body_area = editor_frame.locator("span.se-placeholder").filter(has_text="글감과 함께")
     if body_area.count() > 0 and body_area.first.is_visible():
         body_area.first.click()
     else:
-        # draft 로드된 경우 — Tab으로 본문 이동 후 전체선택
         page.keyboard.press("Tab")
         time.sleep(0.5)
         page.keyboard.press("Meta+a")
@@ -147,7 +157,7 @@ def upload(context, data: dict) -> None:
     page.keyboard.press("Meta+v")
     time.sleep(random.uniform(1.5, 2.5))
 
-    # 5. 발행 버튼 클릭 (1차) - 도움말 패널 먼저 닫기
+    # 5. 발행 버튼 클릭
     print("  [5] 발행 버튼 클릭")
     close_btn = editor_frame.locator("button.se-help-panel-close-button")
     if close_btn.count() > 0 and close_btn.first.is_visible():
@@ -156,10 +166,10 @@ def upload(context, data: dict) -> None:
     editor_frame.locator("button.publish_btn__m9KHH").click()
     time.sleep(2)
 
-    # 6. 카테고리 선택 — 드롭다운 열고 li에서 선택
+    # 6. 카테고리 선택
     print(f"  [6] 카테고리 선택: {data['category']}")
     time.sleep(1)
-    editor_frame.locator("span.text__sraQE").first.click()  # 드롭다운 열기
+    editor_frame.locator("span.text__sraQE").first.click()
     time.sleep(1)
     editor_frame.locator("[class*='option_category'] li").filter(has_text=data["category"]).first.click(timeout=10000)
     time.sleep(0.5)
@@ -187,11 +197,11 @@ def upload(context, data: dict) -> None:
 
 def run_with_retry(max_retries: int = 3) -> bool:
     if not PROFILE_DIR.exists():
-        print("프로필 디렉토리가 없습니다. 먼저 setup_naver_session.py를 실행하세요.")
+        print(f"프로필 디렉토리가 없습니다. 먼저 setup_naver_session.py --account {N} 을 실행하세요.")
         return False
 
     data = read_output_files()
-    print(f"업로드 시작: {data['title']}")
+    print(f"업로드 시작 (계정 {N}): {data['title']}")
 
     for attempt in range(1, max_retries + 1):
         print(f"\n[시도 {attempt}/{max_retries}]")
@@ -203,18 +213,14 @@ def run_with_retry(max_retries: int = 3) -> bool:
                     headless=False,
                     slow_mo=200,
                     viewport={"width": 1280, "height": 900},
-                    args=[
-                        "--disable-blink-features=AutomationControlled",
-                    ],
+                    args=["--disable-blink-features=AutomationControlled"],
                     ignore_default_args=["--enable-automation"],
                 )
-                # 쿠키 복원
                 restore_cookies(context)
-
                 upload(context, data)
                 context.close()
 
-            send_telegram(f"✅ 네이버 업로드 완료\n제목: {data['title']}")
+            send_telegram(f"✅ 네이버 업로드 완료 (계정 {N})\n제목: {data['title']}")
             return True
 
         except PlaywrightTimeoutError as e:
@@ -227,7 +233,7 @@ def run_with_retry(max_retries: int = 3) -> bool:
             print(f"  {delay}초 후 재시도...")
             time.sleep(delay)
 
-    send_telegram(f"❌ 네이버 업로드 실패 (3회)\n제목: {data['title']}")
+    send_telegram(f"❌ 네이버 업로드 실패 (계정 {N}, 3회)\n제목: {data['title']}")
     return False
 
 
